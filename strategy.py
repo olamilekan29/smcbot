@@ -6,8 +6,6 @@ from config import TF_BIAS, TF_POI, TF_ENTRY, CANDLE_COUNT
 
 
 def run_strategy(symbol):
-    print(f"\n🔍 Scanning {symbol}...")
-
     # ── STEP 1: 4H Bias ──
     df_4h = get_candles(symbol, TF_BIAS, CANDLE_COUNT)
     if df_4h is None or df_4h.empty:
@@ -36,13 +34,20 @@ def run_strategy(symbol):
     if df_15m is None or df_15m.empty:
         return None
 
-    # Check most recent OBs first
+    current_price = df_15m["close"].iloc[-1]
+    print(f"   Current price: {current_price:.5f}")
+
     for ob in reversed(valid_obs[-5:]):
-        if not price_in_ob_zone(df_15m, ob):
+        print(f"   Checking OB → {ob['type']} | Zone: {ob['bottom']:.5f} – {ob['top']:.5f}")
+
+        in_zone = price_in_ob_zone(df_15m, ob)
+        print(f"   Price in zone: {in_zone}")
+
+        if not in_zone:
             continue
 
-        print(f"   ✅ Price at OB zone — checking for sweep...")
         sweep = detect_liquidity_sweep(df_15m, ob)
+        print(f"   Sweep detected: {sweep['swept']}")
 
         if sweep["swept"]:
             print(f"   🎯 ENTRY FOUND: {sweep['signal']}")
@@ -55,4 +60,5 @@ def run_strategy(symbol):
                 "df_1h":   df_1h
             }
 
+    print(f"   ⏳ OBs found but price not at any zone yet")
     return None
