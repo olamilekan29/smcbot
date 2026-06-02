@@ -1,0 +1,8 @@
+requests
+pandas
+numpy
+mplfinance
+matplotlib
+python-telegram-bot
+python-dotenv
+twelvedata
