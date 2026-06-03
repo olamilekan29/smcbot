@@ -5,4 +5,4 @@ mplfinance
 matplotlib
 python-telegram-bot
 python-dotenv
-twelvedata
+yfinance
