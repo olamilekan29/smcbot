@@ -3,18 +3,58 @@ from config import IMPULSE_FACTOR
 
 
 # ── CHECK 1: Impulse move ──────────────────────────────────────────
+# def is_impulse(df, index):
+#     """
+#     The candle after the OB must be significantly 
+#     larger than the average candle body.
+#     """
+#     if index >= len(df):
+#         return False
+#     body     = abs(df["close"].iloc[index] - df["open"].iloc[index])
+#     avg_body = abs(df["close"] - df["open"]).rolling(20).mean().iloc[index]
+#     if avg_body == 0:
+#         return False
+#     return body >= avg_body * IMPULSE_FACTOR
+
+
 def is_impulse(df, index):
-    """
-    The candle after the OB must be significantly 
-    larger than the average candle body.
-    """
     if index >= len(df):
         return False
-    body     = abs(df["close"].iloc[index] - df["open"].iloc[index])
+
+    candle = df.iloc[index]
+    body   = abs(candle["close"] - candle["open"])
+    spread = candle["high"] - candle["low"]  # full candle range
+
+    if spread == 0:
+        return False
+
+    # 1. Body must be at least 70% of the full candle range
+    #    (eliminates doji and spinning top candles as impulse)
+    body_ratio = body / spread
+    if body_ratio < 0.70:
+        return False
+
+    # 2. Body must be 2x larger than the 20-candle average body
+    #    (eliminates small candles dressed as impulse)
     avg_body = abs(df["close"] - df["open"]).rolling(20).mean().iloc[index]
     if avg_body == 0:
         return False
-    return body >= avg_body * IMPULSE_FACTOR
+    if body < avg_body * 2.0:
+        return False
+
+    # 3. For bullish impulse — must close in top 30% of its range
+    #    For bearish impulse — must close in bottom 30% of its range
+    is_bullish_candle = candle["close"] > candle["open"]
+    close_position    = (candle["close"] - candle["low"]) / spread
+
+    if is_bullish_candle and close_position < 0.70:
+        return False  # closed too low — not a strong bullish impulse
+
+    if not is_bullish_candle and close_position > 0.30:
+        return False  # closed too high — not a strong bearish impulse
+
+    return True
+    
 
 
 # ── CHECK 2: FVG left behind ───────────────────────────────────────
@@ -136,6 +176,28 @@ def get_valid_obs(df_1h, bias):
                 "fvg":    fvg,
                 "index":  i,
                 "time":   candle["time"]
+
+                
             })
 
     return valid_obs
+
+def is_ob_mitigated(df_1h, ob):
+    """
+    An OB is mitigated if price has already traded back 
+    into it after it formed — meaning it's been used up.
+    """
+    ob_index = ob["index"]
+    
+    # Look at all candles AFTER the OB formed
+    future_candles = df_1h.iloc[ob_index + 2:]
+    
+    if ob["type"] == "Bullish OB":
+        # Mitigated if any future candle closed below the OB bottom
+        mitigated = (future_candles["close"] < ob["bottom"]).any()
+    else:
+        # Mitigated if any future candle closed above the OB top
+        mitigated = (future_candles["close"] > ob["top"]).any()
+    
+    return mitigated
+

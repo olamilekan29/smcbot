@@ -17,9 +17,8 @@ HEADERS = {
 PAIRS = [
     "EUR/USD",
     "GBP/USD",
-    "USD/JPY",
     "GBP/JPY",
-    "XAU/USD"   # Gold
+    "XAU/USD"   
 ]
 
 # Timeframes
@@ -32,4 +31,4 @@ CANDLE_COUNT    = 300   # how many candles to pull
 SWING_LOOKBACK  = 5     # candles each side for swing detection
 IMPULSE_FACTOR  = 1.5   # body must be 1.5x average to count as impulse
 RR_RATIO        = 3     # 1:3 risk reward
-SL_BUFFER       = 0.0005  # buffer below/above sweep for SL
+SL_BUFFER       = 0.0015  # buffer below/above sweep for SL
