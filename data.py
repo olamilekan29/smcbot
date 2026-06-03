@@ -67,9 +67,80 @@
 
 
 
+# import requests
+# import pandas as pd
+# import os
+# from dotenv import load_dotenv
+
+# load_dotenv()
+
+# API_KEY  = os.getenv("POLYGON_API_KEY")
+# BASE_URL = "https://api.polygon.io"
+
+# # Timeframe map — Polygon format
+# TF_MAP = {
+#     "H4":  ("hour",   4),
+#     "H1":  ("hour",   1),
+#     "M15": ("minute", 15)
+# }
+
+# def get_candles(symbol, granularity, count=300):
+#     """
+#     symbol      = "EUR/USD" — auto converted to Polygon format C:EURUSD
+#     granularity = "H4", "H1", "M15"
+#     """
+#     # Convert EUR/USD → C:EURUSD
+#     poly_symbol = "C:" + symbol.replace("/", "")
+
+#     timespan, multiplier = TF_MAP[granularity]
+
+#     url = f"{BASE_URL}/v2/aggs/ticker/{poly_symbol}/range/{multiplier}/{timespan}/2020-01-01/2030-01-01"
+
+#     params = {
+#         "adjusted": "true",
+#         "sort":     "asc",
+#         "limit":    count,
+#         "apiKey":   API_KEY
+#     }
+
+#     response = requests.get(url, params=params)
+
+#     if response.status_code != 200:
+#         print(f"Error fetching {symbol} {granularity}: {response.text}")
+#         return None
+
+#     data = response.json()
+
+#     if "results" not in data or not data["results"]:
+#         print(f"No data for {symbol} {granularity}")
+#         return None
+
+#     df = pd.DataFrame(data["results"])
+#     df = df.rename(columns={
+#         "t": "time",
+#         "o": "open",
+#         "h": "high",
+#         "l": "low",
+#         "c": "close",
+#         "v": "volume"
+#     })
+
+#     df["time"]   = pd.to_datetime(df["time"], unit="ms")
+#     df["open"]   = df["open"].astype(float)
+#     df["high"]   = df["high"].astype(float)
+#     df["low"]    = df["low"].astype(float)
+#     df["close"]  = df["close"].astype(float)
+
+#     # Return only the last `count` candles
+#     df = df.tail(count).reset_index(drop=True)
+
+#     return df
+
+
 import requests
 import pandas as pd
 import os
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -77,7 +148,6 @@ load_dotenv()
 API_KEY  = os.getenv("POLYGON_API_KEY")
 BASE_URL = "https://api.polygon.io"
 
-# Timeframe map — Polygon format
 TF_MAP = {
     "H4":  ("hour",   4),
     "H1":  ("hour",   1),
@@ -85,37 +155,52 @@ TF_MAP = {
 }
 
 def get_candles(symbol, granularity, count=300):
-    """
-    symbol      = "EUR/USD" — auto converted to Polygon format C:EURUSD
-    granularity = "H4", "H1", "M15"
-    """
     # Convert EUR/USD → C:EURUSD
     poly_symbol = "C:" + symbol.replace("/", "")
 
     timespan, multiplier = TF_MAP[granularity]
 
-    url = f"{BASE_URL}/v2/aggs/ticker/{poly_symbol}/range/{multiplier}/{timespan}/2020-01-01/2030-01-01"
+    # Calculate how far back we need to go to get `count` candles
+    # H4 = 4hrs per candle, need 300 = 1200 hours = 50 days back
+    # H1 = 1hr per candle, need 300 = 300 hours = 13 days back
+    # M15 = 15min per candle, need 200 = 3000 mins = ~3 days back
+    days_back_map = {
+        "H4":  100,   # extra buffer
+        "H1":  30,
+        "M15": 10
+    }
+    days_back = days_back_map.get(granularity, 30)
+
+    date_to   = datetime.utcnow().strftime("%Y-%m-%d")
+    date_from = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+    url = (
+        f"{BASE_URL}/v2/aggs/ticker/{poly_symbol}/range"
+        f"/{multiplier}/{timespan}/{date_from}/{date_to}"
+    )
 
     params = {
         "adjusted": "true",
         "sort":     "asc",
-        "limit":    count,
+        "limit":    50000,  # max allowed — we filter down after
         "apiKey":   API_KEY
     }
 
     response = requests.get(url, params=params)
 
     if response.status_code != 200:
-        print(f"Error fetching {symbol} {granularity}: {response.text}")
+        print(f"   ❌ API error {response.status_code}: {response.text}")
         return None
 
     data = response.json()
 
     if "results" not in data or not data["results"]:
-        print(f"No data for {symbol} {granularity}")
+        print(f"   ❌ No results in response: {data}")
         return None
 
     df = pd.DataFrame(data["results"])
+
+    # Rename Polygon columns to standard names
     df = df.rename(columns={
         "t": "time",
         "o": "open",
@@ -125,6 +210,9 @@ def get_candles(symbol, granularity, count=300):
         "v": "volume"
     })
 
+    # Keep only the columns we need
+    df = df[["time", "open", "high", "low", "close", "volume"]]
+
     df["time"]   = pd.to_datetime(df["time"], unit="ms")
     df["open"]   = df["open"].astype(float)
     df["high"]   = df["high"].astype(float)
@@ -133,5 +221,7 @@ def get_candles(symbol, granularity, count=300):
 
     # Return only the last `count` candles
     df = df.tail(count).reset_index(drop=True)
+
+    print(f"   ✅ Got {len(df)} candles for {symbol} {granularity}")
 
     return df
