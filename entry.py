@@ -126,6 +126,12 @@
 
 #     return {"swept": False}
 
+from config import SL_BUFFER, RR_RATIO
+
+def price_in_ob_zone(df_15m, ob):
+    """Is current price inside the OB zone?"""
+    current = df_15m["close"].iloc[-1]
+    return ob["bottom"] <= current <= ob["top"]
 
 def detect_liquidity_sweep(df_15m, ob):
     recent = df_15m.tail(6).reset_index(drop=True)
