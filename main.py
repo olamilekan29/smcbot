@@ -39,7 +39,7 @@ async def main():
     while True:
         print("\n🔍 Starting full scan...")
         await scan_all_pairs()
-        print("\n✅ Full scan done. Next scan in 5 minutes...")
+        print("\n✅ Full scan done. Next scan in 30 minutes...")
         await asyncio.sleep(1800)  # 5 min break between full scans
 
 asyncio.run(main())
